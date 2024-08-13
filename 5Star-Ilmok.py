@@ -1,10 +1,16 @@
 import streamlit as st
 import yfinance as yf
-import requests
-from bs4 import BeautifulSoup
 import pandas as pd
+import os
 from datetime import datetime
 import plotly.graph_objects as go
+import requests
+from bs4 import BeautifulSoup
+
+# Generate filenames with dates
+# today_str = datetime.today().strftime('%Y%m%d')
+nasdaq_filename = f'nasdaq_100_info.csv'
+sp500_filename = f'sp500_info.csv'
 
 # Function to fetch NASDAQ-100 tickers and company info from Wikipedia
 def fetch_nasdaq_100_info():
@@ -29,7 +35,9 @@ def fetch_nasdaq_100_info():
             "GICS Sub-Industry": sub_industry
         })
     
-    return pd.DataFrame(companies_info)
+    df = pd.DataFrame(companies_info)
+    df.to_csv(nasdaq_filename, index=False)  # Save to CSV with today's date
+    return df
 
 # Function to fetch S&P 500 tickers and company info from Wikipedia
 def fetch_sp500_info():
@@ -54,34 +62,46 @@ def fetch_sp500_info():
             "GICS Sub-Industry": sub_industry
         })
     
-    return pd.DataFrame(companies_info)
+    df = pd.DataFrame(companies_info)
+    df.to_csv(sp500_filename, index=False)  # Save to CSV with today's date
+    return df
 
-# Function to load stock list dynamically
+# Function to load stock information from CSV or fetch it if not available
 def load_stock_info(index):
     if index == "NASDAQ":
-        try:
+        if os.path.exists(nasdaq_filename):
+            return pd.read_csv(nasdaq_filename)
+        else:
             return fetch_nasdaq_100_info()
-        except Exception as e:
-            st.warning(f"Unable to fetch data for NASDAQ. Error: {e}")
-            return pd.DataFrame({
-                "Company": ["Apple Inc", "Microsoft Corporation", "Amazon.com, Inc.", "Facebook, Inc.", "Tesla, Inc."],
-                "Ticker": ["AAPL", "MSFT", "AMZN", "FB", "TSLA"],
-                "GICS Sector": ["Information Technology", "Information Technology", "Consumer Discretionary", "Communication Services", "Consumer Discretionary"],
-                "GICS Sub-Industry": ["Technology Hardware, Storage & Peripherals", "Systems Software", "Internet & Direct Marketing Retail", "Interactive Media & Services", "Automobile Manufacturers"]
-            })
     elif index == "S&P 500":
-        try:
+        if os.path.exists(sp500_filename):
+            return pd.read_csv(sp500_filename)
+        else:
             return fetch_sp500_info()
-        except Exception as e:
-            st.warning(f"Unable to fetch data for S&P 500. Error: {e}")
-            return pd.DataFrame({
-                "Company": ["Apple Inc", "Microsoft Corporation", "Amazon.com, Inc.", "Alphabet Inc. (Class A)", "Alphabet Inc. (Class C)"],
-                "Ticker": ["AAPL", "MSFT", "AMZN", "GOOGL", "GOOG"],
-                "GICS Sector": ["Information Technology", "Information Technology", "Consumer Discretionary", "Communication Services", "Communication Services"],
-                "GICS Sub-Industry": ["Technology Hardware, Storage & Peripherals", "Systems Software", "Internet & Direct Marketing Retail", "Interactive Media & Services", "Interactive Media & Services"]
-            })
     else:
         return pd.DataFrame()
+
+today_str = datetime.today().strftime('%Y%m%d')
+
+# Function to load stock data from CSV or fetch it if not available
+def load_stock_data(ticker, start_date, end_date):
+    # Create a filename based on the ticker and date
+    filename = f'{ticker}_{today_str}.csv'
+    
+    # Check if the file exists
+    if os.path.exists(filename):
+        # Load data from CSV
+        data = pd.read_csv(filename, index_col='Date', parse_dates=True)
+        st.write(f"Loaded data from {filename}")
+    else:
+        # Fetch data from Yahoo Finance
+        data = yf.download(ticker, start=start_date, end=end_date)
+        # Save the data to CSV
+        if not data.empty:
+            data.to_csv(filename)
+            st.write(f"Saved data to {filename}")
+    
+    return data
 
 # Example usage in Streamlit
 st.title("Stock Data Analysis")
@@ -93,23 +113,25 @@ index = st.sidebar.selectbox("Select an index:", ["NASDAQ", "S&P 500"])
 stock_info_df = load_stock_info(index)
 
 if not stock_info_df.empty:
-    selected_company = st.sidebar.selectbox("Select a company to analyze:", stock_info_df["Company"].tolist())
+    selected_company = st.sidebar.selectbox("Select a company to analyze:", stock_info_df["Ticker"].tolist())
     
-    selected_info = stock_info_df[stock_info_df["Company"] == selected_company].iloc[0]
+    selected_info = stock_info_df[stock_info_df["Ticker"] == selected_company].iloc[0]
     ticker = selected_info["Ticker"]
     
     # Display selected company details
-    st.subheader(f"Company: {selected_info['Company']}")
-    st.write(f"**Ticker:** {selected_info['Ticker']}")
-    st.write(f"**GICS Sector:** {selected_info['GICS Sector']}")
-    st.write(f"**GICS Sub-Industry:** {selected_info['GICS Sub-Industry']}")
+    st.subheader(f"Company: {selected_info['Company']} ({selected_info['Ticker']})")
+    st.write(f"**Sector:** {selected_info['GICS Sector']}")
+    st.write(f"**Sub-Industry:** {selected_info['GICS Sub-Industry']}")
+  #  st.write(f"**Ticker:** {selected_info['Ticker']}")
+
 
     # Date selection
     start_date = st.sidebar.date_input("Start date", value=datetime(2020, 1, 1))
     end_date = st.sidebar.date_input("End date", value=datetime.today())
 
     # Fetch stock data from Yahoo Finance
-    data = yf.download(ticker, start=start_date, end=end_date)
+    # Load or fetch stock data
+    data = load_stock_data(ticker, start_date, end_date)
 
     if data.empty:
         st.error(f"No data found for {ticker}. Please select another stock.")
@@ -139,7 +161,7 @@ if not stock_info_df.empty:
         red_area = data[data['Senkou Span A'] < data['Senkou Span B']]
 
         # Plotly chart
-        st.subheader(f"Ichimoku Kinko Hyo for {selected_info['Company']} ({ticker})")
+        st.subheader(f"일목현황표")
 
         fig = go.Figure()
 
@@ -196,14 +218,16 @@ if not stock_info_df.empty:
             showlegend=False
         ))
 
+        # Adjust plot size
         fig.update_layout(
-            title=f"Ichimoku Kinko Hyo for {selected_info['Company']} ({ticker})",
+          #  title=f"Ichimoku Kinko Hyo for {selected_info['Company']} ({ticker})",
             xaxis_title='Date',
             yaxis_title='Price',
+            width=2000,  # Adjust the width as needed
+            height=1200,  # Adjust the height as needed
             template='plotly_white',
             showlegend=True
         )
-
         # Show the plot
         st.plotly_chart(fig)
 
