@@ -161,7 +161,7 @@ if not stock_info_df.empty:
         red_area = data[data['Senkou Span A'] < data['Senkou Span B']]
 
         # Plotly chart
-        st.subheader(f"일목현황표")
+        st.subheader(f"일목균형표")
 
         fig = go.Figure()
 
