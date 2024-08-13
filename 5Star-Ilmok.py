@@ -223,8 +223,8 @@ if not stock_info_df.empty:
           #  title=f"Ichimoku Kinko Hyo for {selected_info['Company']} ({ticker})",
             xaxis_title='Date',
             yaxis_title='Price',
-            width=2000,  # Adjust the width as needed
-            height=1200,  # Adjust the height as needed
+            width=1000,  # Adjust the width as needed
+            height=600,  # Adjust the height as needed
             template='plotly_white',
             showlegend=True
         )
