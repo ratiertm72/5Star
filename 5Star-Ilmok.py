@@ -52,8 +52,8 @@ def fetch_sp500_info():
         cells = row.findAll('td')
         ticker = cells[0].text.strip().replace('.', '-')  # Replace '.' with '-' for Yahoo Finance compatibility
         company = cells[1].text.strip()
-        sector = cells[3].text.strip()
-        sub_industry = cells[4].text.strip()
+        sector = cells[2].text.strip()
+        sub_industry = cells[3].text.strip()
         
         companies_info.append({
             "Company": company,
